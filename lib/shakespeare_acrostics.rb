@@ -13,6 +13,11 @@ require_relative 'shakespeare_acrostics/version.rb'
 
 module ShakespeareAcrostics
 
+  # Reference to the root directory.
+  def self.root
+    File.expand_path('../../', __FILE__)
+  end
+
   # Open connection to 'shakespeare', execute a single query, close connection.
   def self.run_query query
     begin
@@ -61,13 +66,16 @@ module ShakespeareAcrostics
   end
 
   # Get all dialogue and poem lines.
+  # Z lines are tricky to match, so kill the leading apostrophe on "'zounds".
   def self.dialogue
-    get_text "
+    lines = get_text "
       SELECT plaintext
       FROM public.paragraph
       WHERE charid != 'xxx'
       ORDER BY paragraphid ASC
     ;"
+    lines.map! { |i| i.sub(/^'zounds/, 'zounds')}
+    lines.map! { |i| i.sub(/^'Zounds/, 'Zounds')}
   end
 
   ##############################################################################
@@ -92,13 +100,17 @@ module ShakespeareAcrostics
   ##############################################################################
 
   # For each 14 character section, generate an acrostic sonnet.
-  # Write to a file.
-  def self.make_acrostics filename
+  # Write to a file as we go, so we can see where it errors (if it does).
+  def self.save_acrostics filename
 
     # Create the database if it doesn't already exist.
     make_database
 
-    # Set up the poem generator with defaults.
+    # Set up the poem generator with our defaults.
+    # We are making sonnets, with 10-syllable lines.
+    # A 2-space indent will be added by the 'acrostic_x' option.
+    # Use transform to uppercase the 3rd letter in each line.
+    # Because of the indent, this will be the letter of the acrostic.
     poefy = Poefy::Poem.new('shakespeare_complete', {
         form: :sonnet,
         syllable: 10,
@@ -107,80 +119,51 @@ module ShakespeareAcrostics
       }
     )
 
-    # Save to file.
+    # Open and write to file.
     File.open(filename, 'w') do |f|
       f.puts ''
-      f.puts 'Sonnets on The Sonnets'
+      f.puts 'Acrostic Sonnets on The Sonnets'
       f.puts ''
       f.puts '  By William Shakespeare'
       f.puts ''
-#     get_sonnet_chunks[-2..-1].each.with_index do |word, index|
-#     get_sonnet_chunks[60..65].each.with_index do |word, index|
-#     get_sonnet_chunks[0..3].each.with_index do |word, index|
+
+      # All but the last poem will be a 14-line sonnet.
+      # Write an envoi acrostic with any remaining letters.
       get_sonnet_chunks.each.with_index do |word, index|
         if word.length == 14
           f.puts ''
-          f.puts RomanNumerals.to_roman(index + 1) + '.'
-          f.puts (index + 1).to_s + '.'
-          f.puts "Acrostic on #{word.downcase}"
+          f.puts RomanNumerals.to_roman(index + 1) + " - \"#{word.upcase}\""
           f.puts ''
-
-          # Repeat until a poem is created.
-          poem = nil
-          options = [
-            { acrostic_x: word },
-            { acrostic_x: word, proper: false },
-            { acrostic_x: word, rhyme: 'abbaabbacdecde' },
-            { acrostic_x: word, rhyme: 'abbaabbacdccdc' },
-            { acrostic_x: word, rhyme: 'abbaabbacdcddc' },
-            { acrostic_x: word, rhyme: 'abbaabbacddcdd' },
-            { acrostic_x: word, rhyme: 'abbaabbacddece' },
-            { acrostic_x: word, rhyme: 'abbaabbacdcdcd' },
-            { acrostic_x: word, rhyme: 'ababbcbccdcdee' },
-            { acrostic_x: word, rhyme: 'ababacdcedefef' },
-            { acrostic_x: word, rhyme: 'abbaabbacdecde', proper: false },
-            { acrostic_x: word, rhyme: 'abbaabbacdccdc', proper: false },
-            { acrostic_x: word, rhyme: 'abbaabbacdcddc', proper: false },
-            { acrostic_x: word, rhyme: 'abbaabbacddcdd', proper: false },
-            { acrostic_x: word, rhyme: 'abbaabbacddece', proper: false },
-            { acrostic_x: word, rhyme: 'abbaabbacdcdcd', proper: false },
-            { acrostic_x: word, rhyme: 'ababbcbccdcdee', proper: false },
-            { acrostic_x: word, rhyme: 'ababacdcedefef', proper: false }
-          ]
-          options.each do |opt|
-            poem = poefy.poem!(opt)
-            break if !poem.nil?
-          end
-          raise StandardError if poem.nil?
-          f.puts (poem ? poem : '#')
+          f.puts poefy.poem({ acrostic_x: word })
         else
           f.puts ''
-          f.puts 'Envoi'
-          f.puts "Acrostic on #{word.downcase}"
+          f.puts "Envoi - \"#{word.upcase}\""
           f.puts ''
-          f.puts poefy.poem!({ rhyme: 'a' * word.length, acrostic_x: word })
+          f.puts poefy.poem({ rhyme: 'a' * word.length, acrostic_x: word })
         end
         f.puts ''
       end
+
       f.puts ''
       f.puts 'THE END'
-      f.puts ''
     end
   end
 end
 
 ################################################################################
 
-# Write the lines to a text file.
-# File.open('sonnets.txt', 'w') do |f|
-#   f.puts ShakespeareAcrostics.sonnets
-# end
-# File.open('dialogue.txt', 'w') do |f|
-#   f.puts ShakespeareAcrostics.dialogue
-# end
+# Module alias.
+sa = ShakespeareAcrostics
 
-#puts ShakespeareAcrostics.get_sonnet_chunks
+# Write the input data to a text file each.
+File.open("#{sa.root}/data/input_sonnets.txt", 'w') do |f|
+  f.puts sa.sonnets
+end
+File.open("#{sa.root}/data/input_dialogue.txt", 'w') do |f|
+  f.puts sa.dialogue
+end
 
-ShakespeareAcrostics.make_acrostics 'acrostics.txt'
+# Generate the acrostics and save to a file.
+sa.save_acrostics "#{sa.root}/data/output_acrostics.txt"
 
 ################################################################################
