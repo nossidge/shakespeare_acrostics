@@ -23,7 +23,7 @@ Gem::Specification.new do |s|
   s.require_paths = ['lib']
   s.bindir        = 'bin'
 
-  s.add_runtime_dependency('poefy',          '~> 1.1', '>= 1.1.0')
+  s.add_runtime_dependency('poefy',          '~> 1.1', '>= 1.1.1')
   s.add_runtime_dependency('poefy-pg',       '~> 1.1', '>= 1.1.0')
   s.add_runtime_dependency('roman-numerals', '~> 0.3', '>= 0.3.0')
 end
